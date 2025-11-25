@@ -475,16 +475,16 @@ local function checkTruckBagCount(entity)
         return
     end
 
-    -- If ox_lib context menus are available, show a per-type menu with unload options.
+    -- If ox_lib context menus are available, show a per-type menu with options.
     if lib and lib.registerContext and lib.showContext then
         local opts = {}
         for bagType, c in pairs(types) do
             local label = ('%s (%d)'):format(bagType, c)
             opts[#opts + 1] = {
                 title = label,
-                description = 'Unload one ' .. bagType .. ' bag into processing',
+                description = 'Pull one ' .. bagType .. ' bag out of the truck (into your hands)',
                 onSelect = function()
-                    TriggerServerEvent('rwh-garbage:server:unloadTruckBagType', plate, bagType)
+                    TriggerServerEvent('rwh-garbage:server:takeTruckBag', plate, bagType)
                 end,
             }
         end

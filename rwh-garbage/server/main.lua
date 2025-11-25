@@ -934,6 +934,62 @@ RegisterNetEvent('rwh-garbage:server:unloadTruckBagType', function(plate, bagTyp
     )
 end)
 
+-- Take a single bag of a specific type out of the truck into the player's hands
+RegisterNetEvent('rwh-garbage:server:takeTruckBag', function(plate, bagType)
+    local src = source
+
+    plate = tostring(plate or ''):upper()
+    bagType = tostring(bagType or 'standard')
+
+    if plate == '' then return end
+
+    -- Player must not already be carrying a bag
+    local has = select(1, getPlayerCarriedBag(src))
+    if has then
+        TriggerClientEvent('rwh-garbage:client:notify', src, 'You are already carrying a garbage bag.', 'error')
+        return
+    end
+
+    if Config.RequireJob and not playerHasRequiredJob(src) then
+        TriggerClientEvent('rwh-garbage:client:notify', src, 'You are not employed as a sanitation worker.', 'error')
+        return
+    end
+
+    local truck = Trucks[plate]
+    if not truck then
+        TriggerClientEvent('rwh-garbage:client:notify', src, 'This truck is not registered for the garbage job.', 'error')
+        return
+    end
+
+    local index = nil
+    for i, bag in ipairs(truck.bags or {}) do
+        if (bag.type or 'standard') == bagType then
+            index = i
+            break
+        end
+    end
+
+    if not index then
+        TriggerClientEvent('rwh-garbage:client:notify', src,
+            ('There are no %s bags in this truck.'):format(bagType),
+            'error'
+        )
+        return
+    end
+
+    local bag = table.remove(truck.bags, index)
+    truck.count = #truck.bags
+    truck.lastActive = os.time()
+
+    -- Give this bag to the player as their carried bag (shows prop in hand on client)
+    setPlayerCarriedBag(src, true, bag.type or bagType)
+
+    TriggerClientEvent('rwh-garbage:client:notify', src,
+        ('You pulled a %s bag out of the truck.'):format(bag.type or bagType),
+        'success'
+    )
+end)
+
 RegisterNetEvent('rwh-garbage:server:processBags', function(plate)
     local src = source
 
@@ -1078,7 +1134,12 @@ end)
 -----------------------------------------------------
 RegisterNetEvent('rwh-garbage:server:grantTruckKeys', function(netId)
     local src = source
-    if not netId or GetResourceState('qbx-vehiclekeys') ~= 'started' then return end
+    if not netId then return end
+
+    if GetResourceState('qbx_vehiclekeys') ~= 'started' then
+        print('[RWH-Garbage] qbx_vehiclekeys is not started; skipping key grant.')
+        return
+    end
 
     local veh = NetworkGetEntityFromNetworkId(netId)
     if not veh or veh == 0 then return end
