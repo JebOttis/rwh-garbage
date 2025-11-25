@@ -605,12 +605,14 @@ RegisterNetEvent('rwh-garbage:server:clockIn', function()
     end
 
     PlayerClockIn[src] = true
+    TriggerClientEvent('rwh-garbage:client:setClockedIn', src, true)
     TriggerClientEvent('rwh-garbage:client:notify', src, 'You clocked in for the garbage job.', 'success')
 end)
 
 RegisterNetEvent('rwh-garbage:server:clockOut', function()
     local src = source
     PlayerClockIn[src] = nil
+    TriggerClientEvent('rwh-garbage:client:setClockedIn', src, false)
     TriggerClientEvent('rwh-garbage:client:notify', src, 'You clocked out of the garbage job.', 'info')
 end)
 
@@ -1118,6 +1120,7 @@ RegisterNetEvent('rwh-garbage:server:endJob', function(plate, deleteVehicle)
 
     PlayerClockIn[src] = nil
     setPlayerCarriedBag(src, false, nil)
+    TriggerClientEvent('rwh-garbage:client:setClockedIn', src, false)
 
     TriggerClientEvent('rwh-garbage:client:notify', src, 'You ended your garbage shift.', 'info')
 end)

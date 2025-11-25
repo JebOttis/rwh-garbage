@@ -6,6 +6,10 @@ local assignedTruckPlate = nil
 local assignedTruckNetId = nil
 
 local nuiOpen = false
+local clockedIn = false
+
+-- Blip handles (so we can toggle visibility when clocking in/out)
+local blipBulkUnload, blipProcessing = nil, nil
 
 -----------------------------------------------------
 -- UTILITY: NOTIFICATIONS
@@ -81,8 +85,20 @@ RegisterNetEvent('rwh-garbage:client:notifyPayout', function(reward, bagCount)
 end)
 
 -----------------------------------------------------
--- UTILITY: PLAYER STATE (CARRIED BAG)
+-- UTILITY: PLAYER STATE (CLOCK-IN & CARRIED BAG)
 -----------------------------------------------------
+RegisterNetEvent('rwh-garbage:client:setClockedIn', function(state)
+    clockedIn = state and true or false
+
+    -- Toggle special job blips based on clock-in state
+    if blipBulkUnload then
+        SetBlipDisplay(blipBulkUnload, clockedIn and 4 or 0)
+    end
+    if blipProcessing then
+        SetBlipDisplay(blipProcessing, clockedIn and 4 or 0)
+    end
+end)
+
 local function deleteCarriedBagProp()
     if carriedBagObj and DoesEntityExist(carriedBagObj) then
         DeleteObject(carriedBagObj)
@@ -839,32 +855,32 @@ CreateThread(function()
             EndTextCommandSetBlipName(blip)
         end
 
-        -- Blip for bulk unload area
+        -- Blip for bulk unload area (only visible when clocked in)
         if rc.UnloadZone and rc.UnloadZone.coords then
             local u = rc.UnloadZone.coords
-            local blipUnload = AddBlipForCoord(u.x, u.y, u.z)
-            SetBlipSprite(blipUnload, 318) -- reuse garbage truck icon
-            SetBlipDisplay(blipUnload, 4)
-            SetBlipScale(blipUnload, 0.4)
-            SetBlipColour(blipUnload, 25)
-            SetBlipAsShortRange(blipUnload, true)
+            blipBulkUnload = AddBlipForCoord(u.x, u.y, u.z)
+            SetBlipSprite(blipBulkUnload, 318) -- reuse garbage truck icon
+            SetBlipDisplay(blipBulkUnload, 0)  -- hidden until clocked in
+            SetBlipScale(blipBulkUnload, 0.7)
+            SetBlipColour(blipBulkUnload, 25)
+            SetBlipAsShortRange(blipBulkUnload, true)
             BeginTextCommandSetBlipName("STRING")
             AddTextComponentString("Garbage Bulk Dump")
-            EndTextCommandSetBlipName(blipUnload)
+            EndTextCommandSetBlipName(blipBulkUnload)
         end
 
-        -- Blip for processing center
+        -- Blip for processing center (only visible when clocked in)
         if rc.ProcessingZone and rc.ProcessingZone.coords then
             local p = rc.ProcessingZone.coords
-            local blipProc = AddBlipForCoord(p.x, p.y, p.z)
-            SetBlipSprite(blipProc, 365) -- recycle-like icon
-            SetBlipDisplay(blipProc, 4)
-            SetBlipScale(blipProc, 0.4)
-            SetBlipColour(blipProc, 25)
-            SetBlipAsShortRange(blipProc, true)
+            blipProcessing = AddBlipForCoord(p.x, p.y, p.z)
+            SetBlipSprite(blipProcessing, 365) -- recycle-like icon
+            SetBlipDisplay(blipProcessing, 0)  -- hidden until clocked in
+            SetBlipScale(blipProcessing, 0.7)
+            SetBlipColour(blipProcessing, 25)
+            SetBlipAsShortRange(blipProcessing, true)
             BeginTextCommandSetBlipName("STRING")
             AddTextComponentString("Garbage Processing")
-            EndTextCommandSetBlipName(blipProc)
+            EndTextCommandSetBlipName(blipProcessing)
         end
     end
 
