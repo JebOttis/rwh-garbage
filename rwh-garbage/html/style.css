@@ -71,6 +71,18 @@ body {
     letter-spacing: 1px;
 }
 
+.terminal-header-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.terminal-header-right {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
 .terminal-title {
     font-weight: bold;
 }
@@ -193,7 +205,7 @@ body {
 
 /* Ensure the SYSTEM LOG area scrolls so the exit button stays visible */
 #system-log {
-    max-height: 180px;
+    height: 180px;            /* fixed height so the log box never stretches the layout */
     overflow-y: auto;
     overflow-x: hidden;
     white-space: pre-wrap;
