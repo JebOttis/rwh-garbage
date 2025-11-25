@@ -90,12 +90,51 @@ end)
 RegisterNetEvent('rwh-garbage:client:setClockedIn', function(state)
     clockedIn = state and true or false
 
-    -- Toggle special job blips based on clock-in state
-    if blipBulkUnload then
-        SetBlipDisplay(blipBulkUnload, clockedIn and 4 or 0)
-    end
-    if blipProcessing then
-        SetBlipDisplay(blipProcessing, clockedIn and 4 or 0)
+    local rc = Config.RecyclingCenter
+
+    if clockedIn then
+        -- Ensure blips exist and are visible when clocked in
+        if rc then
+            if (not blipBulkUnload or not DoesBlipExist(blipBulkUnload)) and rc.UnloadZone and rc.UnloadZone.coords then
+                local u = rc.UnloadZone.coords
+                blipBulkUnload = AddBlipForCoord(u.x, u.y, u.z)
+                SetBlipSprite(blipBulkUnload, 318)
+                SetBlipScale(blipBulkUnload, 0.7)
+                SetBlipColour(blipBulkUnload, 25)
+                SetBlipAsShortRange(blipBulkUnload, true)
+                BeginTextCommandSetBlipName("STRING")
+                AddTextComponentString("Garbage Bulk Dump")
+                EndTextCommandSetBlipName(blipBulkUnload)
+            end
+
+            if (not blipProcessing or not DoesBlipExist(blipProcessing)) and rc.ProcessingZone and rc.ProcessingZone.coords then
+                local p = rc.ProcessingZone.coords
+                blipProcessing = AddBlipForCoord(p.x, p.y, p.z)
+                SetBlipSprite(blipProcessing, 365)
+                SetBlipScale(blipProcessing, 0.7)
+                SetBlipColour(blipProcessing, 25)
+                SetBlipAsShortRange(blipProcessing, true)
+                BeginTextCommandSetBlipName("STRING")
+                AddTextComponentString("Garbage Processing")
+                EndTextCommandSetBlipName(blipProcessing)
+            end
+        end
+
+        if blipBulkUnload then
+            SetBlipDisplay(blipBulkUnload, 4)
+        end
+        if blipProcessing then
+            SetBlipDisplay(blipProcessing, 4)
+        end
+    else
+        -- Fully remove blips when clocking off duty
+        if blipBulkUnload and DoesBlipExist(blipBulkUnload) then
+            RemoveBlip(blipBulkUnload)
+        end
+        if blipProcessing and DoesBlipExist(blipProcessing) then
+            RemoveBlip(blipProcessing)
+        end
+        blipBulkUnload, blipProcessing = nil, nil
     end
 end)
 
