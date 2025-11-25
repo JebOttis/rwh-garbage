@@ -57,7 +57,11 @@ local function chargePlayerRent(src, amount)
     end
 
     if not Core then
-        print('[RWH-Garbage] No framework core available to charge rent; allowing r    if Framework == 'qbx' or Framework == 'qb' then
+        print('[RWH-Garbage] No framework core available to charge rent; allowing rent for free.')
+        return true
+    end
+
+    if Framework == 'qbx' or Framework == 'qb' then
         local player = Core.Functions.GetPlayer(src)
         if not player then return false end
         local cash = player.Functions.GetMoney('cash') or 0
@@ -548,6 +552,32 @@ RegisterNetEvent('rwh-garbage:server:clockOut', function()
     TriggerClientEvent('rwh-garbage:client:notify', src, 'You clocked out of the garbage job.', 'info')
 end)
 
+
+-----------------------------------------------------
+-- EVENTS: RENT TRUCK / REGISTER TRUCK
+-----------------------------------------------------
+
+local function computeTimedRent(hours)
+    local baseHourly = Config.RentBaseHourly or 35
+    local opts = Config.RentHourOptions or { 1, 2, 4, 8 }
+    local discounts = Config.RentHourDiscounts or {}
+
+    hours = tonumber(hours) or 1
+    if hours < 1 then hours = 1 end
+
+    local allowed = false
+    for _, h in ipairs(opts) do
+        if h == hours then allowed = true break end
+    end
+    if not allowed then hours = opts[1] or 1 end
+
+    local discount = discounts[hours] or 1.0
+    local amount = math.floor(baseHourly * hours * discount)
+    return hours, amount
+end
+
+RegisterNetEvent('rwh-garbage:server:rentTruck', function(hours)
+    local src = source
 
     if Config.RequireJob and not playerHasRequiredJob(src) then
         TriggerClientEvent('rwh-garbage:client:notify', src, 'You are not employed as a sanitation worker.', 'error')

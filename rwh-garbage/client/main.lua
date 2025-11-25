@@ -581,11 +581,6 @@ RegisterNUICallback('startShift', function(_, cb)
     cb('ok')
 end)
 
-RegisterNUICallback('endShift', function(_, cb)
-    TriggerServerEvent('rwh-garbage:server:clockOut')
-    cb('ok')
-end)
-
 RegisterNUICallback('endShiftReturn', function(_, cb)
     local plate = assignedTruckPlate
     if plate and plate ~= '' then
