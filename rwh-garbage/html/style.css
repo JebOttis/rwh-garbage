@@ -9,8 +9,13 @@ html, body {
     height: 100%;
     overflow: hidden;
     font-family: "IBM Plex Mono", monospace;
-    background: radial-gradient(circle at top, #111 0, #050505 40%, #000 100%);
+    background: transparent;
     color: #d0f8c6;
+}
+
+/* NUI should be hidden until explicitly opened from client */
+body {
+    display: none;
 }
 
 #overlay {
