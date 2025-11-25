@@ -824,18 +824,48 @@ CreateThread(function()
     registerTruckTargets()
     registerRecyclingCenterTargets()
 
-    -- Map blip for garbage job location
+    -- Map blip for garbage job location (clock-in / terminal)
     local rc = Config.RecyclingCenter
-    if rc and rc.ClockIn and rc.ClockIn.coords then
-        local blip = AddBlipForCoord(rc.ClockIn.coords.x, rc.ClockIn.coords.y, rc.ClockIn.coords.z)
-        SetBlipSprite(blip, 318) -- garbage truck icon
-        SetBlipDisplay(blip, 4)
-        SetBlipScale(blip, 0.9)
-        SetBlipColour(blip, 25)
-        SetBlipAsShortRange(blip, true)
-        BeginTextCommandSetBlipName("STRING")
-        AddTextComponentString("Garbage Job")
-        EndTextCommandSetBlipName(blip)
+    if rc then
+        if rc.ClockIn and rc.ClockIn.coords then
+            local blip = AddBlipForCoord(rc.ClockIn.coords.x, rc.ClockIn.coords.y, rc.ClockIn.coords.z)
+            SetBlipSprite(blip, 318) -- garbage truck icon
+            SetBlipDisplay(blip, 4)
+            SetBlipScale(blip, 0.9)
+            SetBlipColour(blip, 25)
+            SetBlipAsShortRange(blip, true)
+            BeginTextCommandSetBlipName("STRING")
+            AddTextComponentString("Garbage Job")
+            EndTextCommandSetBlipName(blip)
+        end
+
+        -- Blip for bulk unload area
+        if rc.UnloadZone and rc.UnloadZone.coords then
+            local u = rc.UnloadZone.coords
+            local blipUnload = AddBlipForCoord(u.x, u.y, u.z)
+            SetBlipSprite(blipUnload, 318) -- reuse garbage truck icon
+            SetBlipDisplay(blipUnload, 4)
+            SetBlipScale(blipUnload, 0.4)
+            SetBlipColour(blipUnload, 25)
+            SetBlipAsShortRange(blipUnload, true)
+            BeginTextCommandSetBlipName("STRING")
+            AddTextComponentString("Garbage Bulk Dump")
+            EndTextCommandSetBlipName(blipUnload)
+        end
+
+        -- Blip for processing center
+        if rc.ProcessingZone and rc.ProcessingZone.coords then
+            local p = rc.ProcessingZone.coords
+            local blipProc = AddBlipForCoord(p.x, p.y, p.z)
+            SetBlipSprite(blipProc, 365) -- recycle-like icon
+            SetBlipDisplay(blipProc, 4)
+            SetBlipScale(blipProc, 0.4)
+            SetBlipColour(blipProc, 25)
+            SetBlipAsShortRange(blipProc, true)
+            BeginTextCommandSetBlipName("STRING")
+            AddTextComponentString("Garbage Processing")
+            EndTextCommandSetBlipName(blipProc)
+        end
     end
 
     print('[RWH-Garbage] Client initialized.')
