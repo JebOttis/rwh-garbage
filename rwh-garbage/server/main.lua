@@ -286,7 +286,7 @@ local function moveBagsToProcessing(plate, amount)
         return 0
     end
 
-    -- Always move bags one-by-one when unloading
+    -- Move up to the requested number of bags (default 1 if not provided)
     local toMove = math.min(#truck.bags, tonumber(amount) or 1)
 
     if toMove <= 0 then
@@ -857,7 +857,7 @@ end)
 -----------------------------------------------------
 -- EVENTS: UNLOAD / PROCESS BAGS
 -----------------------------------------------------
-RegisterNetEvent('rwh-garbage:server:unloadTruckBags', function(plate)
+RegisterNetEvent('rwh-garbage:server:unloadTruckBags', function(plate, amount)
     local src = source
 
     plate = tostring(plate or ''):upper()
@@ -874,14 +874,16 @@ RegisterNetEvent('rwh-garbage:server:unloadTruckBags', function(plate)
         return
     end
 
-    local moved = moveBagsToProcessing(plate, 1)
+    -- Bulk unload: move up to the configured maximum number of bags
+    local maxBags = Config.UnloadMaxBags or 50
+    local moved = moveBagsToProcessing(plate, maxBags)
     if moved <= 0 then
         TriggerClientEvent('rwh-garbage:client:notify', src, 'There are no bags in the truck to unload.', 'error')
         return
     end
 
     TriggerClientEvent('rwh-garbage:client:notify', src,
-        ('Unloaded %d bag from the truck into processing.'):format(moved),
+        ('Unloaded %d bag(s) from the truck into processing.'):format(moved),
         'success'
     )
 end)
@@ -1136,17 +1138,14 @@ RegisterNetEvent('rwh-garbage:server:grantTruckKeys', function(netId)
     local src = source
     if not netId then return end
 
-    if GetResourceState('qbx_vehiclekeys') ~= 'started' then
-        print('[RWH-Garbage] qbx_vehiclekeys is not started; skipping key grant.')
-        return
-    end
-
     local veh = NetworkGetEntityFromNetworkId(netId)
     if not veh or veh == 0 then return end
 
     local ok, err = pcall(function()
         if exports['qbx_vehiclekeys'] and exports['qbx_vehiclekeys'].GiveKeys then
             exports['qbx_vehiclekeys']:GiveKeys(src, veh, false)
+        else
+            print('[RWH-Garbage] qbx_vehiclekeys export or GiveKeys function not found.')
         end
     end)
     if not ok then

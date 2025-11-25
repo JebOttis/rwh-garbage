@@ -510,7 +510,7 @@ local function checkTruckBagCount(entity)
     Notify(('Truck contains %d/%d bags. %s'):format(count, limit, table.concat(parts, ', ')), 'info')
 end
 
-local function unloadTruckBags()
+local function unloadTruckBags(amount)
     local veh = getNearestGarbageTruck(Config.TruckSearchRadius or 10.0)
     if not veh or veh == 0 then
         Notify('No garbage truck nearby to unload.', 'error')
@@ -541,7 +541,9 @@ local function unloadTruckBags()
         playSimpleScenario(3000, 'WORLD_HUMAN_CLIPBOARD')
     end
 
-    TriggerServerEvent('rwh-garbage:server:unloadTruckBags', plate)
+    -- For bulk unload, pass a large amount; server will clamp to available bags
+    local maxBags = Config.UnloadMaxBags or 50
+    TriggerServerEvent('rwh-garbage:server:unloadTruckBags', plate, maxBags)
 end
 
 local function processBags()
@@ -719,10 +721,8 @@ RegisterNetEvent('rwh-garbage:client:spawnTruck', function(data)
     -- Inform server about the new truck.
     TriggerServerEvent('rwh-garbage:server:registerTruck', plate, netId, data.rentHours or 1, data.rentCost or (Config.RentBaseHourly or 35))
 
-    -- Ask server to grant keys via qbx_vehiclekeys (if available)
-    if NetworkGetEntityIsNetworked(veh) then
-        TriggerServerEvent('rwh-garbage:server:grantTruckKeys', netId)
-    end
+    -- Ask server to grant keys via qbx_vehiclekeys
+    TriggerServerEvent('rwh-garbage:server:grantTruckKeys', netId)
 
     assignedTruckPlate = plate
     assignedTruckNetId = netId
@@ -768,7 +768,7 @@ local function registerRecyclingCenterTargets()
                 {
                     name = 'rwh_garbage_unload',
                     icon = 'fa-solid fa-dumpster',
-                    label = 'Unload Bags',
+                    label = 'Unload Bags (Bulk)',
                     onSelect = function()
                         unloadTruckBags()
                     end,
@@ -798,6 +798,15 @@ local function registerRecyclingCenterTargets()
                 label = 'Process Bags',
                 onSelect = function()
                     processBags()
+                end,
+            },
+            {
+                name = 'rwh_garbage_unload_single_at_processing',
+                icon = 'fa-solid fa-box-open',
+                label = 'Unload 1 Bag from Truck to Processing',
+                onSelect = function()
+                    -- Use the same logic as bulk unload but only move a single bag
+                    unloadTruckBags(1)
                 end,
             },
         })
