@@ -1,5 +1,6 @@
 local carryingBag = false
 local carryingBagType = nil
+local carriedBagObj = nil -- prop attached to player hand when carrying
 
 local assignedTruckPlate = nil
 local assignedTruckNetId = nil
@@ -82,9 +83,48 @@ end)
 -----------------------------------------------------
 -- UTILITY: PLAYER STATE (CARRIED BAG)
 -----------------------------------------------------
+local function deleteCarriedBagProp()
+    if carriedBagObj and DoesEntityExist(carriedBagObj) then
+        DeleteObject(carriedBagObj)
+    end
+    carriedBagObj = nil
+end
+
+local function attachCarriedBagProp()
+    deleteCarriedBagProp()
+
+    local model = joaat(Config.BagPropModel or 'prop_ld_rub_binbag_01')
+    RequestModel(model)
+    while not HasModelLoaded(model) do
+        Wait(0)
+    end
+
+    local ped = PlayerPedId()
+    local obj = CreateObject(model, 0.0, 0.0, 0.0, true, false, false)
+
+    -- Attach to right hand with a rough offset/rotation so it looks like a held trash bag
+    AttachEntityToEntity(
+        obj,
+        ped,
+        GetPedBoneIndex(ped, 57005), -- right hand
+        0.15, -0.25, -0.02,          -- position offset
+        220.0, 120.0, 80.0,          -- rotation
+        true, true, false, true, 1, true
+    )
+
+    carriedBagObj = obj
+    SetModelAsNoLongerNeeded(model)
+end
+
 RegisterNetEvent('rwh-garbage:client:setCarryingBag', function(hasBag, bagType)
     carryingBag = hasBag and true or false
     carryingBagType = hasBag and bagType or nil
+
+    if carryingBag then
+        attachCarriedBagProp()
+    else
+        deleteCarriedBagProp()
+    end
 end)
 
 -----------------------------------------------------
@@ -115,7 +155,7 @@ local function getNearestGarbageTruck(radius)
         local dist = #(vehPos - pos)
         if dist <= closestDist then
             -- Optional: restrict to our truck model only
-            if not Config.LimitToGarbageModel or GetEntityModel(veh) == GetHashKey(Config.TruckModel or 'trash2') then
+            if not Config.LimitToGarbageModel or GetEntityModel(veh) == GetHashKey(Config.TruckModel or 'trash') then
                 closestVeh = veh
                 closestDist = dist
             end
@@ -615,7 +655,7 @@ local function registerTruckTargets()
                 if distance > 3.0 then return false end
                 if not carryingBag then return false end
                 if Config.LimitToGarbageModel then
-                    return GetEntityModel(entity) == GetHashKey(Config.TruckModel or 'trash2')
+                    return GetEntityModel(entity) == GetHashKey(Config.TruckModel or 'trash')
                 end
                 return true
             end,
@@ -631,7 +671,7 @@ local function registerTruckTargets()
             canInteract = function(entity, distance, coords, name)
                 if distance > 3.0 then return false end
                 if Config.LimitToGarbageModel then
-                    return GetEntityModel(entity) == GetHashKey(Config.TruckModel or 'trash2')
+                    return GetEntityModel(entity) == GetHashKey(Config.TruckModel or 'trash')
                 end
                 return true
             end,
@@ -661,7 +701,7 @@ end
 -- RECYCLING CENTER INTERACTIONS
 -----------------------------------------------------
 RegisterNetEvent('rwh-garbage:client:spawnTruck', function(data)
-    local modelName = data.model or 'trash2'
+    local modelName = data.model or 'trash'
     local coords = data.coords or GetEntityCoords(PlayerPedId())
     local heading = data.heading or 0.0
 
@@ -737,22 +777,28 @@ local function registerRecyclingCenterTargets()
         })
     end
 
-    -- Processing zone: physical processing only (quick process option)
+    -- Processing prop: use specific object at fixed location for processing
     if rc.ProcessingZone and rc.ProcessingZone.coords then
-        exports.ox_target:addBoxZone({
-            coords = rc.ProcessingZone.coords,
-            size = rc.ProcessingZone.size or vec3(3.0, 3.0, 2.5),
-            rotation = rc.ProcessingZone.rotation or 0.0,
-            debug = rc.ProcessingZone.debug or false,
-            options = {
-                {
-                    name = 'rwh_garbage_process',
-                    icon = 'fa-solid fa-recycle',
-                    label = 'Process Bags (Quick)',
-                    onSelect = function()
-                        processBags()
-                    end,
-                },
+        local model = 3187190857 -- processing prop hash provided
+        RequestModel(model)
+        while not HasModelLoaded(model) do
+            Wait(0)
+        end
+
+        local pcoords = rc.ProcessingZone.coords
+        local prop = CreateObject(model, pcoords.x, pcoords.y, pcoords.z, false, false, false)
+        SetEntityHeading(prop, rc.ProcessingZone.rotation or 0.0)
+        FreezeEntityPosition(prop, true)
+        SetEntityAsMissionEntity(prop, true, false)
+
+        exports.ox_target:addLocalEntity(prop, {
+            {
+                name = 'rwh_garbage_process',
+                icon = 'fa-solid fa-recycle',
+                label = 'Process Bags',
+                onSelect = function()
+                    processBags()
+                end,
             },
         })
     end

@@ -132,6 +132,7 @@ body {
     display: flex;
     flex-direction: column;
     gap: 10px;
+    overflow-y: auto; /* allow internal scrolling so footer stays fixed */
 }
 
 .logo-glitch {
@@ -192,7 +193,7 @@ body {
 
 /* Ensure the SYSTEM LOG area scrolls so the exit button stays visible */
 #system-log {
-    max-height: 220px;
+    max-height: 180px;
     overflow-y: auto;
 }
 

@@ -18,7 +18,7 @@ Config.RequireClockIn = true
 Config.TruckBagLimit = 50
 
 -- Model of the garbage truck to spawn for this job.
-Config.TruckModel = 'trash2'
+Config.TruckModel = 'trash'
 
 -- Rent settings.
 -- Legacy flat price (used for quick-rent label; 1 hour base by default).
@@ -147,9 +147,9 @@ Config.RecyclingCenter = {
         debug = false,
     },
 
-    -- Zone to process bags and receive payouts.
+    -- Zone center used for payout radius around the processing prop.
     ProcessingZone = {
-        coords = vec3(-350.5, -1561.5, 25.0),
+        coords = vec3(-349.71, -1546.32, 27.22),
         size = vec3(3.0, 3.0, 2.5),
         rotation = 0.0,
         debug = false,

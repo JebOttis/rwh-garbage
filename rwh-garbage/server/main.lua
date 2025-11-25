@@ -365,6 +365,10 @@ local function rollRewardsForBag(bagType)
     end
 
     if conf.items and #conf.items > 0 then
+        -- First roll all potential item drops for this bag, then clamp to 2-4 distinct
+        -- item stacks per bag where possible, and cap each stack at 4 units.
+        local candidates = {}
+
         for _, item in ipairs(conf.items) do
             local chance = tonumber(item.chance) or 0
             if chance > 0 and math.random(100) <= chance then
@@ -372,11 +376,41 @@ local function rollRewardsForBag(bagType)
                 local maxI = math.floor(item.max or minI)
                 if maxI > 0 and maxI >= minI then
                     local count = math.random(minI, maxI)
+                    count = math.min(count, 4) -- do not exceed 4 items per stack
                     if count > 0 then
-                        result.items[#result.items + 1] = {
+                        candidates[#candidates + 1] = {
                             name = item.name,
                             count = count,
                         }
+                    end
+                end
+            end
+        end
+
+        local n = #candidates
+        if n > 0 then
+            if n <= 4 then
+                -- 1-4 candidates: give them all (cannot guarantee 2 if only 1 rolled)
+                for _, it in ipairs(candidates) do
+                    result.items[#result.items + 1] = it
+                end
+            else
+                -- More than 4: randomly pick between 2 and 4 distinct items
+                local desiredMin = math.min(2, n) -- if n==1, this becomes 1
+                local desiredMax = math.min(4, n)
+                local desired = math.random(desiredMin, desiredMax)
+
+                local indices = {}
+                for i = 1, n do indices[i] = i end
+                for i = n, 2, -1 do
+                    local j = math.random(1, i)
+                    indices[i], indices[j] = indices[j], indices[i]
+                end
+
+                for i = 1, desired do
+                    local it = candidates[indices[i]]
+                    if it then
+                        result.items[#result.items + 1] = it
                     end
                 end
             end
@@ -636,7 +670,7 @@ RegisterNetEvent('rwh-garbage:server:rentTruck', function(hours)
 
     -- Ask client to spawn the truck and report back plate/netId.
     TriggerClientEvent('rwh-garbage:client:spawnTruck', src, {
-        model = Config.TruckModel or 'trash2',
+        model = Config.TruckModel or 'trash',
         coords = spawn.coords,
         heading = spawn.heading or 0.0,
         rentHours = rentHours,
@@ -795,7 +829,7 @@ RegisterNetEvent('rwh-garbage:server:loadBagIntoTruck', function(plate)
         local entity = NetworkGetEntityFromNetworkId(truck.netId)
         if entity and entity ~= 0 and DoesEntityExist(entity) then
             local model = GetEntityModel(entity)
-            if model ~= GetHashKey(Config.TruckModel or 'trash2') then
+            if model ~= GetHashKey(Config.TruckModel or 'trash') then
                 TriggerClientEvent('rwh-garbage:client:notify', src, 'You can only load garbage bags into a job truck.', 'error')
                 return
             end
