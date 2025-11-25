@@ -4,21 +4,40 @@ local carryingBagType = nil
 local assignedTruckPlate = nil
 local assignedTruckNetId = nil
 
+local nuiOpen = false
+
 -----------------------------------------------------
 -- UTILITY: NOTIFICATIONS
 -----------------------------------------------------
+local function Notify(msg, nType)
+    nType = nType or 'info'
+
+    if lib and lib.notify then
+        lib.notify({
+            title = 'Garbage Job',
+            description = msg,
+            type = nType,
+        })
+        return
+    end
+
+    -- Fallback: simple native feed notification if ox_lib is not available
+    BeginTextCommandThefeedPost("STRING")
+    AddTextComponentSubstringPlayerName(('[Garbage Job] %s'):format(msg))
+    EndTextCommandThefeedPostTicker(false, false)
+end
+
 RegisterNetEvent('rwh-garbage:client:notify', function(msg, nType)
-    lib.notify({
-        title = 'Garbage Job',
-        description = msg,
-        type = nType or 'info',
-    })
+    Notify(msg, nType)
 end)
 
 RegisterNetEvent('rwh-garbage:client:notifyPayout', function(reward, bagCount)
     local cash = reward.cash or 0
-    local itemCount = #(reward.items or {})
-    local weaponCount = #(reward.weapons or {})
+    local items = reward.items or {}
+    local weapons = reward.weapons or {}
+
+    local itemCount = #items
+    local weaponCount = #weapons
 
     local parts = {}
     if cash > 0 then table.insert(parts, ('$%d cash'):format(cash)) end
@@ -30,11 +49,34 @@ RegisterNetEvent('rwh-garbage:client:notifyPayout', function(reward, bagCount)
         desc = desc .. ' You received: ' .. table.concat(parts, ', ') .. '.'
     end
 
-    lib.notify({
-        title = 'Garbage Job',
-        description = desc,
-        type = 'success',
-    })
+    -- Push detailed summary into NUI if the terminal is open
+    if nuiOpen then
+        local lines = {}
+        table.insert(lines, ('Processed %d bags.'):format(bagCount or 0))
+        if cash > 0 then
+            table.insert(lines, ('Cash: $%d'):format(cash))
+        end
+        if itemCount > 0 then
+            table.insert(lines, 'Items:')
+            for _, item in ipairs(items) do
+                table.insert(lines, (' - %sx %s'):format(item.count or 1, item.name or 'unknown'))
+            end
+        end
+        if weaponCount > 0 then
+            table.insert(lines, 'Weapons:')
+            for _, w in ipairs(weapons) do
+                table.insert(lines, (' - %s'):format(w))
+            end
+        end
+
+        SendNUIMessage({
+            action = 'summary',
+            lines = lines,
+        })
+    end
+
+    -- Still show a quick toast so players notice immediately
+    Notify(desc, 'success')
 end)
 
 -----------------------------------------------------
@@ -125,17 +167,9 @@ local function checkDumpsterBagsEntity(entity)
 
     if not result or not result.ok then
         if result and result.reason == 'no_job' then
-            lib.notify({
-                title = 'Garbage Job',
-                description = 'You are not employed as a sanitation worker.',
-                type = 'error',
-            })
+            Notify('You are not employed as a sanitation worker.', 'error')
         else
-            lib.notify({
-                title = 'Garbage Job',
-                description = 'Unable to read this dumpster.',
-                type = 'error',
-            })
+            Notify('Unable to read this dumpster.', 'error')
         end
         return
     end
@@ -149,11 +183,7 @@ local function checkDumpsterBagsEntity(entity)
         msg = ('This dumpster has %d %s bag(s) remaining.'):format(remaining, bagType)
     end
 
-    lib.notify({
-        title = 'Garbage Job',
-        description = msg,
-        type = 'info',
-    })
+    Notify(msg, 'info')
 end
 
 local function checkDumpsterBagsCoords(coords)
@@ -183,17 +213,9 @@ local function checkDumpsterBagsCoords(coords)
 
     if not result or not result.ok then
         if result and result.reason == 'no_job' then
-            lib.notify({
-                title = 'Garbage Job',
-                description = 'You are not employed as a sanitation worker.',
-                type = 'error',
-            })
+            Notify('You are not employed as a sanitation worker.', 'error')
         else
-            lib.notify({
-                title = 'Garbage Job',
-                description = 'Unable to read this dumpster.',
-                type = 'error',
-            })
+            Notify('Unable to read this dumpster.', 'error')
         end
         return
     end
@@ -207,20 +229,12 @@ local function checkDumpsterBagsCoords(coords)
         msg = ('This dumpster has %d %s bag(s) remaining.'):format(remaining, bagType)
     end
 
-    lib.notify({
-        title = 'Garbage Job',
-        description = msg,
-        type = 'info',
-    })
+    Notify(msg, 'info')
 end
 
 local function takeBagFromDumpsterEntity(entity)
     if carryingBag then
-        lib.notify({
-            title = 'Garbage Job',
-            description = 'You are already carrying a garbage bag.',
-            type = 'error',
-        })
+        Notify('You are already carrying a garbage bag.', 'error')
         return
     end
 
@@ -325,21 +339,13 @@ end
 -----------------------------------------------------
 local function loadBagIntoTruck(entity)
     if not carryingBag then
-        lib.notify({
-            title = 'Garbage Job',
-            description = 'You are not carrying a garbage bag.',
-            type = 'error',
-        })
+        Notify('You are not carrying a garbage bag.', 'error')
         return
     end
 
     local plate = getVehiclePlate(entity)
     if not plate or plate == '' then
-        lib.notify({
-            title = 'Garbage Job',
-            description = 'This vehicle has no plate; cannot load bags.',
-            type = 'error',
-        })
+        Notify('This vehicle has no plate; cannot load bags.', 'error')
         return
     end
 
@@ -367,49 +373,29 @@ end
 local function checkTruckBagCount(entity)
     local plate = getVehiclePlate(entity)
     if not plate or plate == '' then
-        lib.notify({
-            title = 'Garbage Job',
-            description = 'This vehicle has no plate.',
-            type = 'error',
-        })
+        Notify('This vehicle has no plate.', 'error')
         return
     end
 
     local res = lib.callback.await('rwh-garbage:server:getTruckBagCount', false, plate)
     if not res or not res.ok then
-        lib.notify({
-            title = 'Garbage Job',
-            description = 'This truck is not registered for the garbage job.',
-            type = 'error',
-        })
+        Notify('This truck is not registered for the garbage job.', 'error')
         return
     end
 
-    lib.notify({
-        title = 'Garbage Job',
-        description = ('Truck contains %d/%d bags.'):format(res.count or 0, res.limit or 0),
-        type = 'info',
-    })
+    Notify(('Truck contains %d/%d bags.'):format(res.count or 0, res.limit or 0), 'info')
 end
 
 local function unloadTruckBags()
     local veh = getNearestGarbageTruck(Config.TruckSearchRadius or 10.0)
     if not veh or veh == 0 then
-        lib.notify({
-            title = 'Garbage Job',
-            description = 'No garbage truck nearby to unload.',
-            type = 'error',
-        })
+        Notify('No garbage truck nearby to unload.', 'error')
         return
     end
 
     local plate = getVehiclePlate(veh)
     if not plate or plate == '' then
-        lib.notify({
-            title = 'Garbage Job',
-            description = 'This vehicle has no plate; cannot unload.',
-            type = 'error',
-        })
+        Notify('This vehicle has no plate; cannot unload.', 'error')
         return
     end
 
@@ -447,11 +433,7 @@ local function processBags()
     end
 
     if not plate or plate == '' then
-        lib.notify({
-            title = 'Garbage Job',
-            description = 'No garbage truck found to process bags for.',
-            type = 'error',
-        })
+        Notify('No garbage truck found to process bags for.', 'error')
         return
     end
 
@@ -475,6 +457,73 @@ local function processBags()
 
     TriggerServerEvent('rwh-garbage:server:processBags', plate)
 end
+
+-- NUI: Recycling terminal
+RegisterNetEvent('rwh-garbage:client:openTerminal', function()
+    if nuiOpen then return end
+    nuiOpen = true
+
+    SetNuiFocus(true, true)
+
+    local name = GetPlayerName(PlayerId()) or 'UNKNOWN'
+    local plate = assignedTruckPlate or 'N/A'
+    local bagCount = 0
+
+    if plate and plate ~= '' and plate ~= 'N/A' then
+        local res = lib and lib.callback and lib.callback.await('rwh-garbage:server:getTruckBagCount', false, plate)
+        if res and res.ok then
+            bagCount = res.count or 0
+        end
+    end
+
+    SendNUIMessage({
+        action = 'open',
+        operator = name,
+        truckPlate = plate,
+        bagCount = bagCount,
+        logLine = 'Terminal session opened.',
+    })
+end)
+
+RegisterNUICallback('close', function(_, cb)
+    nuiOpen = false
+    SetNuiFocus(false, false)
+    SendNUIMessage({ action = 'close' })
+    cb('ok')
+end)
+
+RegisterNUICallback('startShift', function(_, cb)
+    TriggerServerEvent('rwh-garbage:server:clockIn')
+    cb('ok')
+end)
+
+RegisterNUICallback('endShift', function(_, cb)
+    TriggerServerEvent('rwh-garbage:server:clockOut')
+    cb('ok')
+end)
+
+RegisterNUICallback('endShiftReturn', function(_, cb)
+    local plate = assignedTruckPlate
+    if plate and plate ~= '' then
+        TriggerServerEvent('rwh-garbage:server:endJob', plate, true)
+        assignedTruckPlate = nil
+        assignedTruckNetId = nil
+    else
+        Notify('No assigned garbage truck to return.', 'error')
+    end
+    cb('ok')
+end)
+
+RegisterNUICallback('processBags', function(_, cb)
+    processBags()
+    cb('ok')
+end)
+
+RegisterNUICallback('rentTruck', function(data, cb)
+    local hours = tonumber(data and data.hours) or 1
+    TriggerServerEvent('rwh-garbage:server:rentTruck', hours)
+    cb('ok')
+end)
 
 local function registerTruckTargets()
     exports.ox_target:addGlobalVehicle({
@@ -539,16 +588,12 @@ RegisterNetEvent('rwh-garbage:client:spawnTruck', function(data)
     SetNetworkIdCanMigrate(netId, true)
 
     -- Inform server about the new truck.
-    TriggerServerEvent('rwh-garbage:server:registerTruck', plate, netId)
+    TriggerServerEvent('rwh-garbage:server:registerTruck', plate, netId, data.rentHours or 1, data.rentCost or (Config.RentBaseHourly or 35))
 
     assignedTruckPlate = plate
     assignedTruckNetId = netId
 
-    lib.notify({
-        title = 'Garbage Job',
-        description = 'Your garbage truck has been delivered. Collect trash around the city and return here to unload.',
-        type = 'success',
-    })
+    Notify('Your garbage truck has been delivered. Collect trash around the city and return here to unload.', 'success')
 end)
 
 local function registerRecyclingCenterTargets()
@@ -616,7 +661,7 @@ local function registerRecyclingCenterTargets()
         })
     end
 
-    -- Processing zone
+    -- Processing zone + NUI terminal
     if rc.ProcessingZone and rc.ProcessingZone.coords then
         exports.ox_target:addBoxZone({
             coords = rc.ProcessingZone.coords,
@@ -627,9 +672,17 @@ local function registerRecyclingCenterTargets()
                 {
                     name = 'rwh_garbage_process',
                     icon = 'fa-solid fa-recycle',
-                    label = 'Process Bags',
+                    label = 'Process Bags (Quick)',
                     onSelect = function()
                         processBags()
+                    end,
+                },
+                {
+                    name = 'rwh_garbage_terminal',
+                    icon = 'fa-solid fa-desktop',
+                    label = 'Use Recycling Terminal',
+                    onSelect = function()
+                        TriggerEvent('rwh-garbage:client:openTerminal')
                     end,
                 },
             },
@@ -647,6 +700,20 @@ CreateThread(function()
     registerDumpsterTargets()
     registerTruckTargets()
     registerRecyclingCenterTargets()
+
+    -- Map blip for garbage job location
+    local rc = Config.RecyclingCenter
+    if rc and rc.ClockIn and rc.ClockIn.coords then
+        local blip = AddBlipForCoord(rc.ClockIn.coords.x, rc.ClockIn.coords.y, rc.ClockIn.coords.z)
+        SetBlipSprite(blip, 318) -- garbage truck icon
+        SetBlipDisplay(blip, 4)
+        SetBlipScale(blip, 0.9)
+        SetBlipColour(blip, 25)
+        SetBlipAsShortRange(blip, true)
+        BeginTextCommandSetBlipName("STRING")
+        AddTextComponentString("Garbage Job")
+        EndTextCommandSetBlipName(blip)
+    end
 
     print('[RWH-Garbage] Client initialized.')
 end)

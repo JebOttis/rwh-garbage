@@ -21,8 +21,25 @@ Config.TruckBagLimit = 50
 Config.TruckModel = 'trash2'
 
 -- Rent settings.
-Config.RentPrice = 250           -- Fee to rent the truck.
-Config.TruckRentIsFree = false   -- If true, RentPrice is ignored and truck is free.
+-- Legacy flat price (used for quick-rent label; 1 hour base by default).
+Config.RentPrice = 35            -- Default to one hour at base rate.
+Config.TruckRentIsFree = false   -- If true, rental is free.
+
+-- Time-based rental settings for NUI / advanced rent flow.
+Config.RentBaseHourly = 35       -- Base price per hour.
+-- Allowed rental hour options and percent discounts.
+-- Example: 1h (no discount), 2h (5% off), 4h (10% off), 8h (15% off).
+Config.RentHourOptions = { 1, 2, 4, 8 }
+Config.RentHourDiscounts = {
+    [1] = 1.0,
+    [2] = 0.95,
+    [4] = 0.90,
+    [8] = 0.85,
+}
+
+-- Damage fee multiplier when returning the truck.
+-- DamageCost = rentCost * DamageChargeMultiplier * damageFraction (0.0-1.0)
+Config.DamageChargeMultiplier = 2.0
 
 -- How to split rewards between assigned players:
 -- 'even'          - split evenly among all assigned players nearby the recycling center.

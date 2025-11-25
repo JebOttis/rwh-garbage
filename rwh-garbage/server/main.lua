@@ -1,4 +1,4 @@
-local Trucks = {}      -- [plate] = { count, bags = {}, players = { [src] = { bagsLoaded = 0 } }, netId, processingPool = {}, lastActive = os.time() }
+local Trucks = {}      -- [plate] = { count, bags = {}, players = { [src] = { bagsLoaded = 0 } }, netId, processingPool = {}, lastActive = os.time(), rent = { ... } }
 local Dumpsters = {}   -- [dumpsterId] = { bagsRemaining, bagType, coords = vector3 }
 local PlayerClockIn = {} -- [src] = true/false
 
@@ -50,18 +50,14 @@ local function playerHasRequiredJob(src)
     return true
 end
 
-local function chargePlayerRent(src)
-    if Config.TruckRentIsFree or Config.RentPrice <= 0 then
+local function chargePlayerRent(src, amount)
+    amount = math.floor(tonumber(amount) or 0)
+    if amount <= 0 or Config.TruckRentIsFree then
         return true
     end
 
     if not Core then
-        print('[RWH-Garbage] No framework core available to charge rent; allowing rent for free.')
-        return true
-    end
-
-    local amount = Config.RentPrice
-    if Framework == 'qbx' or Framework == 'qb' then
+        print('[RWH-Garbage] No framework core available to charge rent; allowing r    if Framework == 'qbx' or Framework == 'qb' then
         local player = Core.Functions.GetPlayer(src)
         if not player then return false end
         local cash = player.Functions.GetMoney('cash') or 0
@@ -207,6 +203,7 @@ local function createTruck(plate, netId)
             players = {},
             processingPool = {},
             lastActive = os.time(),
+            rent = nil, -- { hours, cost, startedAt, engineStart, bodyStart, renter, damageCharged }
         }
         Trucks[plate] = truck
         debugPrint(('Created truck entry for %s (netId=%s)'):format(plate, tostring(netId)))
@@ -545,11 +542,6 @@ RegisterNetEvent('rwh-garbage:server:clockOut', function()
     TriggerClientEvent('rwh-garbage:client:notify', src, 'You clocked out of the garbage job.', 'info')
 end)
 
------------------------------------------------------
--- EVENTS: RENT TRUCK / REGISTER TRUCK
------------------------------------------------------
-RegisterNetEvent('rwh-garbage:server:rentTruck', function()
-    local src = source
 
     if Config.RequireJob and not playerHasRequiredJob(src) then
         TriggerClientEvent('rwh-garbage:client:notify', src, 'You are not employed as a sanitation worker.', 'error')
@@ -561,8 +553,13 @@ RegisterNetEvent('rwh-garbage:server:rentTruck', function()
         return
     end
 
-    if not chargePlayerRent(src) then
-        TriggerClientEvent('rwh-garbage:client:notify', src, ('You need $%d in cash to rent a garbage truck.'):format(Config.RentPrice), 'error')
+    local rentHours, rentCost = computeTimedRent(hours)
+
+    if not chargePlayerRent(src, rentCost) then
+        TriggerClientEvent('rwh-garbage:client:notify', src,
+            ('You need $%d in cash to rent a garbage truck for %d hour(s).'):format(rentCost, rentHours),
+            'error'
+        )
         return
     end
 
@@ -578,11 +575,13 @@ RegisterNetEvent('rwh-garbage:server:rentTruck', function()
         model = Config.TruckModel or 'trash2',
         coords = spawn.coords,
         heading = spawn.heading or 0.0,
+        rentHours = rentHours,
+        rentCost = rentCost,
     })
 end)
 
 -- Client reports created truck plate + netId so we can track it.
-RegisterNetEvent('rwh-garbage:server:registerTruck', function(plate, netId)
+RegisterNetEvent('rwh-garbage:server:registerTruck', function(plate, netId, rentHours, rentCost)
     local src = source
     plate = tostring(plate or ''):upper()
     if plate == '' then
@@ -592,7 +591,31 @@ RegisterNetEvent('rwh-garbage:server:registerTruck', function(plate, netId)
     local truck = createTruck(plate, netId)
     addPlayerToTruck(truck, src)
 
-    TriggerClientEvent('rwh-garbage:client:notify', src, ('You rented a garbage truck (%s).'):format(plate), 'success')
+    rentHours = tonumber(rentHours) or 1
+    rentCost = tonumber(rentCost) or (Config.RentBaseHourly or 35)
+
+    local ent = NetworkGetEntityFromNetworkId(netId)
+    local engineStart = 1000.0
+    local bodyStart = 1000.0
+    if ent and ent ~= 0 and DoesEntityExist(ent) then
+        engineStart = GetVehicleEngineHealth(ent) or 1000.0
+        bodyStart = GetVehicleBodyHealth(ent) or 1000.0
+    end
+
+    truck.rent = {
+        hours = rentHours,
+        cost = rentCost,
+        startedAt = os.time(),
+        engineStart = engineStart,
+        bodyStart = bodyStart,
+        renter = src,
+        damageCharged = false,
+    }
+
+    TriggerClientEvent('rwh-garbage:client:notify', src,
+        ('You rented a garbage truck (%s) for %d hour(s) at $%d.'):format(plate, rentHours, rentCost),
+        'success'
+    )
     TriggerClientEvent('rwh-garbage:client:setAssignedTruck', src, plate, netId)
 end)
 
@@ -797,11 +820,58 @@ end)
 -----------------------------------------------------
 -- EVENTS: END JOB / RETURN TRUCK (OPTIONAL)
 -----------------------------------------------------
+local function chargeTruckDamage(src, plate)
+    local truck = Trucks[plate]
+    if not truck or not truck.rent or truck.rent.damageCharged then return end
+
+    local ent = truck.netId and NetworkGetEntityFromNetworkId(truck.netId) or nil
+    if not ent or ent == 0 or not DoesEntityExist(ent) then return end
+
+    local engineNow = GetVehicleEngineHealth(ent) or 1000.0
+    local bodyNow = GetVehicleBodyHealth(ent) or 1000.0
+
+    local engineStart = truck.rent.engineStart or 1000.0
+    local bodyStart = truck.rent.bodyStart or 1000.0
+
+    local startAvg = math.max(1.0, (engineStart + bodyStart) / 2.0)
+    local nowAvg = math.max(0.0, (engineNow + bodyNow) / 2.0)
+
+    local damageFrac = math.max(0.0, (startAvg - nowAvg) / startAvg)
+    if damageFrac <= 0.05 then -- ignore minor wear under 5%
+        return
+    end
+
+    local baseCost = tonumber(truck.rent.cost) or 0
+    if baseCost <= 0 then return end
+
+    local multiplier = Config.DamageChargeMultiplier or 2.0
+    local damageCost = math.floor(baseCost * multiplier * damageFrac)
+    if damageCost <= 0 then return end
+
+    if Core and (Framework == 'qbx' or Framework == 'qb') then
+        local player = Core.Functions.GetPlayer(src)
+        if player then
+            local cash = player.Functions.GetMoney('cash') or 0
+            local charged = math.min(cash, damageCost)
+            if charged > 0 then
+                player.Functions.RemoveMoney('cash', charged, 'garbage-truck-damage')
+                TriggerClientEvent('rwh-garbage:client:notify', src,
+                    ('You were charged $%d for garbage truck damage.'):format(charged),
+                    'error'
+                )
+            end
+        end
+    end
+
+    truck.rent.damageCharged = true
+end
+
 RegisterNetEvent('rwh-garbage:server:endJob', function(plate, deleteVehicle)
     local src = source
 
     plate = tostring(plate or ''):upper()
     if plate ~= '' then
+        chargeTruckDamage(src, plate)
         cleanupTruck(plate, deleteVehicle)
     end
 

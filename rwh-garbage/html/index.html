@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <title>RWH Recycling Terminal</title>
+    <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+    <div id="overlay"></div>
+    <div class="terminal-frame">
+        <div class="terminal-bezel">
+            <div class="terminal-header">
+                <span class="terminal-title">R.W.H. RECYCLING INTERFACE v1.3</span>
+                <span class="terminal-status">STATUS: ONLINE*</span>
+            </div>
+            <div class="terminal-screen">
+                <div class="scanline"></div>
+                <div class="screen-inner">
+                    <div class="screen-noise"></div>
+                    <div class="screen-content">
+                        <div class="logo-glitch">RWH SANITATION</div>
+
+                        <div class="section">
+                            <div class="section-title">SESSION</div>
+                            <div class="section-body mono">
+                                <p>&gt; Operator: <span id="op-name">UNKNOWN</span></p>
+                                <p>&gt; Active Truck: <span id="truck-plate">N/A</span></p>
+                                <p>&gt; Bags in processing queue: <span id="bag-count">0</span></p>
+                            </div>
+                        </div>
+
+                        <div class="section grid-two">
+                            <div>
+                                <div class="section-title">ACTIONS</div>
+                                <div class="button-list">
+                                    <button class="btn btn-primary" data-action="startShift">START SHIFT</button>
+                                    <button class="btn btn-secondary" data-action="endShift">END SHIFT</button>
+                                    <button class="btn btn-primary" data-action="processBags">PROCESS BAGS</button>
+                                    <button class="btn btn-secondary" data-action="endShiftReturn">END &amp; RETURN TRUCK</button>
+                                </div>
+                                <div class="section" style="margin-top:6px;">
+                                    <div class="section-title">TRUCK RENTAL</div>
+                                    <div class="section-body mono small">
+                                        <p>&gt; Base rate: $35 / hr</p>
+                                        <p>&gt; Longer rentals receive a discount.</p>
+                                        <label>Duration:
+                                            <select id="rent-hours" style="margin-left:4px; font-size:11px;">
+                                                <option value="1">1 hour - $35</option>
+                                                <option value="2">2 hours - $66 (5% off)</option>
+                                                <option value="4">4 hours - $126 (10% off)</option>
+                                                <option value="8">8 hours - $238 (15% off)</option>
+                                            </select>
+                                        </label>
+                                        <button class="btn btn-primary" style="margin-top:4px;" data-action="rentTruck">RENT GARBAGE TRUCK</button>
+                                    </div>
+                                </div>
+                            </div>
+                            <div>
+                                <div class="section-title">SUMMARY (LAST RUN)</div>
+                                <div class="section-body mono small" id="summary-log">
+                                    <p>&gt; NO DATA</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="section">
+                            <div class="section-title">SYSTEM LOG</div>
+                            <div class="section-body mono small" id="system-log">
+                                <p>&gt; BOOTING RWH RECYCLING SUITE...</p>
+                                <p>&gt; READING JOB METADATA...</p>
+                                <p>&gt; READY.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="terminal-footer">
+                <div class="led led-red"></div>
+                <div class="led led-amber"></div>
+                <div class="scratches"></div>
+                <button class="btn-exit" id="btn-exit">X</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>

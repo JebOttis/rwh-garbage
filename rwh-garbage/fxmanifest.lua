@@ -6,6 +6,14 @@ author 'RWH'
 description 'RWH Garbage Job Script (qbx_core + ox_inventory/ox_target/ox_lib)'
 version '1.0.0'
 
+ui_page 'html/index.html'
+
+files {
+    'html/index.html',
+    'html/style.css',
+    'html/script.js',
+}
+
 shared_scripts {
     '@ox_lib/init.lua',
     'shared/config.lua',
