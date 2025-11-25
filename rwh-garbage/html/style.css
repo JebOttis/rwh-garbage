@@ -190,6 +190,12 @@ body {
     overflow-y: auto;
 }
 
+/* Ensure the SYSTEM LOG area scrolls so the exit button stays visible */
+#system-log {
+    max-height: 220px;
+    overflow-y: auto;
+}
+
 .section-body p {
     margin-bottom: 1px;
 }

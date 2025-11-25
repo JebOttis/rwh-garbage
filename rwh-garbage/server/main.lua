@@ -6,15 +6,43 @@ local Framework = Config.Framework or 'qbx'
 local Core = nil
 
 -----------------------------------------------------
--- FRAMEWORK INITIALIZATION
+-- FRAMEWORK INITIALIZATION (SAFE)
 -----------------------------------------------------
-if Framework == 'qbx' then
-    Core = exports['qbx-core']:GetCoreObject()
-elseif Framework == 'qb' then
-    Core = exports['qb-core']:GetCoreObject()
-else
-    print('[RWH-Garbage] Unknown framework: ' .. tostring(Framework) .. ' - money/job checks will not work!')
+local function initFramework()
+    local configured = Framework
+
+    if configured == 'qbx' then
+        local ok, obj = pcall(function()
+            return exports['qbx_core']:GetCoreObject()
+        end)
+        if ok and obj then
+            Core = obj
+            Framework = 'qbx'
+            print('[RWH-Garbage] Using qbx-core framework.')
+            return
+        else
+            print('[RWH-Garbage] Failed to get qbx-core GetCoreObject export, trying qb-core fallback...')
+        end
+    end
+
+    if configured == 'qb' or not Core then
+        local ok, obj = pcall(function()
+            return exports['qb-core']:GetCoreObject()
+        end)
+        if ok and obj then
+            Core = obj
+            Framework = 'qb'
+            print('[RWH-Garbage] Using qb-core framework.')
+            return
+        end
+    end
+
+    if not Core then
+        print('[RWH-Garbage] WARNING: Could not initialize qbx-core or qb-core; money/job checks will be disabled.')
+    end
 end
+
+initFramework()
 
 local function debugPrint(msg)
     if Config.Debug then
