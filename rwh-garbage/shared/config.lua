@@ -291,6 +291,9 @@ Config.TruckSearchRadius = 10.0
 -- Small prefix for truck plates so you can identify job vehicles.
 Config.TruckPlatePrefix = 'RWHG'
 
+-- Model for dropped garbage bag props on the ground.
+Config.BagPropModel = 'prop_ld_rub_binbag_01'
+
 -- OPTIONAL: Change this to lock interactions to a specific vehicle model only.
 -- By default, any vehicle with a registered truck plate is allowed.
 Config.LimitToGarbageModel = true

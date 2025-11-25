@@ -254,10 +254,8 @@ local function moveBagsToProcessing(plate, amount)
         return 0
     end
 
-    local toMove = #truck.bags
-    if not Config.UnloadAllBags then
-        toMove = math.min(toMove, amount or Config.UnloadMaxBags or 50)
-    end
+    -- Always move bags one-by-one when unloading
+    local toMove = math.min(#truck.bags, tonumber(amount) or 1)
 
     if toMove <= 0 then
         return 0
@@ -513,12 +511,20 @@ end)
 lib.callback.register('rwh-garbage:server:getTruckBagCount', function(src, plate)
     local truck = Trucks[plate]
     if not truck then
-        return { ok = false, count = 0, limit = Config.TruckBagLimit or 50 }
+        return { ok = false, count = 0, limit = Config.TruckBagLimit or 50, types = {} }
     end
+
+    local typeCounts = {}
+    for _, bag in ipairs(truck.bags or {}) do
+        local btype = bag.type or 'standard'
+        typeCounts[btype] = (typeCounts[btype] or 0) + 1
+    end
+
     return {
         ok = true,
         count = truck.count,
         limit = Config.TruckBagLimit or 50,
+        types = typeCounts,
     }
 end)
 
@@ -620,7 +626,7 @@ RegisterNetEvent('rwh-garbage:server:registerTruck', function(plate, netId, rent
 end)
 
 -----------------------------------------------------
--- EVENTS: DUMPSTER BAG HANDLING
+-- EVENTS: DUMPSTER / WORLD BAG HANDLING
 -----------------------------------------------------
 RegisterNetEvent('rwh-garbage:server:takeBag', function(coords)
     local src = source
@@ -661,6 +667,43 @@ RegisterNetEvent('rwh-garbage:server:takeBag', function(coords)
     )
 
     debugPrint(('Player %d took bag from dumpster %s, remaining = %d'):format(src, id, dumpster.bagsRemaining))
+end)
+
+-- Drop a carried bag onto the ground as a prop
+RegisterNetEvent('rwh-garbage:server:dropCarriedBag', function()
+    local src = source
+
+    local has, bagType = getPlayerCarriedBag(src)
+    if not has then
+        TriggerClientEvent('rwh-garbage:client:notify', src, 'You are not carrying a garbage bag.', 'error')
+        return
+    end
+
+    setPlayerCarriedBag(src, false, nil)
+
+    local ped = GetPlayerPed(src)
+    if not ped or ped == 0 then return end
+    local coords = GetEntityCoords(ped)
+
+    TriggerClientEvent('rwh-garbage:client:spawnDroppedBag', -1, {
+        x = coords.x,
+        y = coords.y,
+        z = coords.z,
+    }, bagType or 'standard')
+end)
+
+-- Pick up a dropped bag prop from the ground
+RegisterNetEvent('rwh-garbage:server:pickupDroppedBag', function(bagType)
+    local src = source
+
+    local has = select(1, getPlayerCarriedBag(src))
+    if has then
+        TriggerClientEvent('rwh-garbage:client:notify', src, 'You are already carrying a garbage bag.', 'error')
+        return
+    end
+
+    bagType = bagType or 'standard'
+    setPlayerCarriedBag(src, true, bagType)
 end)
 
 -----------------------------------------------------
@@ -739,14 +782,62 @@ RegisterNetEvent('rwh-garbage:server:unloadTruckBags', function(plate)
         return
     end
 
-    local moved = moveBagsToProcessing(plate, Config.UnloadMaxBags)
+    local moved = moveBagsToProcessing(plate, 1)
     if moved <= 0 then
         TriggerClientEvent('rwh-garbage:client:notify', src, 'There are no bags in the truck to unload.', 'error')
         return
     end
 
     TriggerClientEvent('rwh-garbage:client:notify', src,
-        ('Unloaded %d bags from the truck.'):format(moved),
+        ('Unloaded %d bag from the truck into processing.'):format(moved),
+        'success'
+    )
+end)
+
+-- Unload a single bag of a specific type into processing (from truck rear / menu)
+RegisterNetEvent('rwh-garbage:server:unloadTruckBagType', function(plate, bagType)
+    local src = source
+
+    plate = tostring(plate or ''):upper()
+    bagType = tostring(bagType or 'standard')
+
+    if plate == '' then return end
+
+    if Config.RequireJob and not playerHasRequiredJob(src) then
+        TriggerClientEvent('rwh-garbage:client:notify', src, 'You are not employed as a sanitation worker.', 'error')
+        return
+    end
+
+    local truck = Trucks[plate]
+    if not truck then
+        TriggerClientEvent('rwh-garbage:client:notify', src, 'This truck is not registered for the garbage job.', 'error')
+        return
+    end
+
+    local index = nil
+    for i, bag in ipairs(truck.bags or {}) do
+        if (bag.type or 'standard') == bagType then
+            index = i
+            break
+        end
+    end
+
+    if not index then
+        TriggerClientEvent('rwh-garbage:client:notify', src,
+            ('There are no %s bags in this truck.'):format(bagType),
+            'error'
+        )
+        return
+    end
+
+    truck.processingPool = truck.processingPool or {}
+    local bag = table.remove(truck.bags, index)
+    truck.processingPool[#truck.processingPool + 1] = bag
+    truck.count = #truck.bags
+    truck.lastActive = os.time()
+
+    TriggerClientEvent('rwh-garbage:client:notify', src,
+        ('Unloaded one %s bag into processing.'):format(bagType),
         'success'
     )
 end)

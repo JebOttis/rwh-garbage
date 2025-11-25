@@ -129,7 +129,7 @@ local function getNearestGarbageTruck(radius)
 end
 
 -----------------------------------------------------
--- DUMPSTER INTERACTIONS
+-- DUMPSTER / DROPPED BAG INTERACTIONS
 -----------------------------------------------------
 local function playSimpleScenario(duration, scenario)
     local ped = PlayerPedId()
@@ -332,6 +332,49 @@ local function registerDumpsterTargets()
             })
         end
     end
+
+    -- Dropped bag props on the ground (pick up)
+    local bagModel = joaat(Config.BagPropModel or 'prop_ld_rub_binbag_01')
+    exports.ox_target:addModel({ bagModel }, {
+        {
+            name = 'rwh_garbage_pickup_bag',
+            icon = 'fa-solid fa-trash',
+            label = 'Pick Up Garbage Bag',
+            canInteract = function(entity, distance, coords, name)
+                if carryingBag then return false end
+                local ent = Entity(entity)
+                return ent and ent.state and ent.state.rwh_garbage_bagType ~= nil
+            end,
+            onSelect = function(data)
+                local ent = Entity(data.entity)
+                local bagType = 'standard'
+                if ent and ent.state and ent.state.rwh_garbage_bagType then
+                    bagType = ent.state.rwh_garbage_bagType
+                end
+
+                -- Simple pickup animation
+                if lib then
+                    lib.progressCircle({
+                        duration = 2000,
+                        label = 'Picking up garbage bag...',
+                        position = 'bottom',
+                        useWhileDead = false,
+                        canCancel = false,
+                        disable = { move = true, car = true, combat = true },
+                        anim = {
+                            dict = 'anim@heists@narcotics@trash',
+                            clip = 'pickup',
+                        },
+                    })
+                else
+                    playSimpleScenario(2000, 'PROP_HUMAN_BUM_BIN')
+                end
+
+                TriggerServerEvent('rwh-garbage:server:pickupDroppedBag', bagType)
+                DeleteObject(data.entity)
+            end,
+        },
+    })
 end
 
 -----------------------------------------------------
@@ -383,7 +426,48 @@ local function checkTruckBagCount(entity)
         return
     end
 
-    Notify(('Truck contains %d/%d bags.'):format(res.count or 0, res.limit or 0), 'info')
+    local count = res.count or 0
+    local limit = res.limit or 0
+    local types = res.types or {}
+
+    if count <= 0 then
+        Notify('The truck is empty.', 'info')
+        return
+    end
+
+    -- If ox_lib context menus are available, show a per-type menu with unload options.
+    if lib and lib.registerContext and lib.showContext then
+        local opts = {}
+        for bagType, c in pairs(types) do
+            local label = ('%s (%d)'):format(bagType, c)
+            opts[#opts + 1] = {
+                title = label,
+                description = 'Unload one ' .. bagType .. ' bag into processing',
+                onSelect = function()
+                    TriggerServerEvent('rwh-garbage:server:unloadTruckBagType', plate, bagType)
+                end,
+            }
+        end
+
+        table.sort(opts, function(a, b) return a.title < b.title end)
+
+        lib.registerContext({
+            id = 'rwh_garbage_truck_bags_' .. plate,
+            title = ('Truck Bags [%s] (%d/%d)'):format(plate, count, limit),
+            options = opts,
+        })
+        lib.showContext('rwh_garbage_truck_bags_' .. plate)
+        return
+    end
+
+    -- Fallback: basic text summary only.
+    local parts = {}
+    for bagType, c in pairs(types) do
+        parts[#parts + 1] = ('%s: %d'):format(bagType, c)
+    end
+    table.sort(parts)
+
+    Notify(('Truck contains %d/%d bags. %s'):format(count, limit, table.concat(parts, ', ')), 'info')
 end
 
 local function unloadTruckBags()
@@ -561,6 +645,21 @@ local function registerTruckTargets()
             end,
         },
     })
+
+    -- Player self-target to drop carried bag
+    exports.ox_target:addGlobalPlayer({
+        {
+            name = 'rwh_garbage_dropbag',
+            icon = 'fa-solid fa-trash-can',
+            label = 'Drop Garbage Bag',
+            canInteract = function(entity, distance, coords, name)
+                return carryingBag == true
+            end,
+            onSelect = function(data)
+                TriggerServerEvent('rwh-garbage:server:dropCarriedBag')
+            end,
+        },
+    })
 end
 
 -----------------------------------------------------
@@ -603,7 +702,7 @@ local function registerRecyclingCenterTargets()
         return
     end
 
-    -- Clock-in / management zone
+    -- Clock-in / management zone: open NUI terminal (handles start/end/rent/etc.)
     if rc.ClockIn and rc.ClockIn.coords then
         exports.ox_target:addBoxZone({
             coords = rc.ClockIn.coords,
@@ -612,29 +711,11 @@ local function registerRecyclingCenterTargets()
             debug = rc.ClockIn.debug or false,
             options = {
                 {
-                    name = 'rwh_garbage_clockin',
-                    icon = 'fa-solid fa-user-clock',
-                    label = 'Clock In',
+                    name = 'rwh_garbage_terminal_main',
+                    icon = 'fa-solid fa-desktop',
+                    label = 'Use Recycling Terminal',
                     onSelect = function()
-                        TriggerServerEvent('rwh-garbage:server:clockIn')
-                    end,
-                },
-                {
-                    name = 'rwh_garbage_clockout',
-                    icon = 'fa-solid fa-user-slash',
-                    label = 'Clock Out',
-                    onSelect = function()
-                        TriggerServerEvent('rwh-garbage:server:clockOut')
-                    end,
-                },
-                {
-                    name = 'rwh_garbage_renttruck',
-                    icon = 'fa-solid fa-truck',
-                    label = ('Rent Garbage Truck%s'):format(
-                        Config.TruckRentIsFree and '' or (' ($' .. Config.RentPrice .. ')')
-                    ),
-                    onSelect = function()
-                        TriggerServerEvent('rwh-garbage:server:rentTruck')
+                        TriggerEvent('rwh-garbage:client:openTerminal')
                     end,
                 },
             },
@@ -661,7 +742,7 @@ local function registerRecyclingCenterTargets()
         })
     end
 
-    -- Processing zone + NUI terminal
+    -- Processing zone: physical processing only (quick process option)
     if rc.ProcessingZone and rc.ProcessingZone.coords then
         exports.ox_target:addBoxZone({
             coords = rc.ProcessingZone.coords,
@@ -675,14 +756,6 @@ local function registerRecyclingCenterTargets()
                     label = 'Process Bags (Quick)',
                     onSelect = function()
                         processBags()
-                    end,
-                },
-                {
-                    name = 'rwh_garbage_terminal',
-                    icon = 'fa-solid fa-desktop',
-                    label = 'Use Recycling Terminal',
-                    onSelect = function()
-                        TriggerEvent('rwh-garbage:client:openTerminal')
                     end,
                 },
             },
