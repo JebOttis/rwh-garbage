@@ -1074,6 +1074,26 @@ AddEventHandler('playerDropped', function()
 end)
 
 -----------------------------------------------------
+-- KEYS: GIVE KEYS FOR RENTED TRUCKS (QBX_VEHICLEKEYS)
+-----------------------------------------------------
+RegisterNetEvent('rwh-garbage:server:grantTruckKeys', function(netId)
+    local src = source
+    if not netId or GetResourceState('qbx-vehiclekeys') ~= 'started' then return end
+
+    local veh = NetworkGetEntityFromNetworkId(netId)
+    if not veh or veh == 0 then return end
+
+    local ok, err = pcall(function()
+        if exports['qbx_vehiclekeys'] and exports['qbx_vehiclekeys'].GiveKeys then
+            exports['qbx_vehiclekeys']:GiveKeys(src, veh, false)
+        end
+    end)
+    if not ok then
+        print(('[RWH-Garbage] Failed to give garbage truck keys via qbx_vehiclekeys: %s'):format(tostring(err)))
+    end
+end)
+
+-----------------------------------------------------
 -- PERIODIC CLEANUP THREAD
 -----------------------------------------------------
 CreateThread(function()

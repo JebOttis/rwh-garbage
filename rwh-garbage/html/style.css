@@ -195,6 +195,9 @@ body {
 #system-log {
     max-height: 180px;
     overflow-y: auto;
+    overflow-x: hidden;
+    white-space: pre-wrap;
+    word-wrap: break-word;
 }
 
 .section-body p {

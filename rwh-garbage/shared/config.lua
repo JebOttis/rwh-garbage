@@ -149,9 +149,9 @@ Config.RecyclingCenter = {
 
     -- Zone center used for payout radius around the processing prop.
     ProcessingZone = {
-        coords = vec3(-349.71, -1546.32, 27.22),
+        coords = vec3(-350.21, -1542.16, 26.72),
         size = vec3(3.0, 3.0, 2.5),
-        rotation = 0.0,
+        rotation = 5.72,
         debug = false,
     },
 }

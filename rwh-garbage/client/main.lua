@@ -633,11 +633,6 @@ RegisterNUICallback('endShiftReturn', function(_, cb)
     cb('ok')
 end)
 
-RegisterNUICallback('processBags', function(_, cb)
-    processBags()
-    cb('ok')
-end)
-
 RegisterNUICallback('rentTruck', function(data, cb)
     local hours = tonumber(data and data.hours) or 1
     TriggerServerEvent('rwh-garbage:server:rentTruck', hours)
@@ -723,6 +718,11 @@ RegisterNetEvent('rwh-garbage:client:spawnTruck', function(data)
 
     -- Inform server about the new truck.
     TriggerServerEvent('rwh-garbage:server:registerTruck', plate, netId, data.rentHours or 1, data.rentCost or (Config.RentBaseHourly or 35))
+
+    -- Ask server to grant keys via qbx_vehiclekeys (if available)
+    if NetworkGetEntityIsNetworked(veh) then
+        TriggerServerEvent('rwh-garbage:server:grantTruckKeys', netId)
+    end
 
     assignedTruckPlate = plate
     assignedTruckNetId = netId
